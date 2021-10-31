@@ -1,50 +1,47 @@
-import React, { useEffect, useState } from 'react';
-import type { ComponentType } from 'react';
-
-export type AsyncComponentOptions = {
-  onError?: (e: Error) => void;
-  onLoad?: (C: ComponentType) => void;
-  Loading?: ComponentType;
-};
+import React, { Component, ComponentType } from 'react';
 
 type DynamicImport = () => Promise<{
   default: ComponentType;
 }>;
 
-export const asyncComponent = (
-  dynamicImport: DynamicImport,
-  options: AsyncComponentOptions = {}
-) => {
-  const [LoadedComponent, setLoadedComponent] = useState<ComponentType>();
-
-  return function AsyncComponent(props = {}) {
-    useEffect(() => {
-      let mounted = true;
-
-      dynamicImport()
-        .then(({ default: Component }) => {
-          if (mounted) {
-            options.onLoad?.(Component);
-            setLoadedComponent(Component);
-          }
-        })
-        .catch((e: Error) => {
-          if (mounted) {
-            options.onError?.(e);
-          }
-        });
-
-      return () => {
-        mounted = false;
-      };
-    }, []);
-
-    if (LoadedComponent) return <LoadedComponent {...props} />;
-
-    if (options.Loading) return <options.Loading />;
-
-    return null;
-  };
+type State<ComponentType> = {
+  component?: ComponentType;
 };
+
+function asyncComponent(importComponent: DynamicImport): ComponentType {
+  class AsyncComponent extends Component {
+    state: State<ComponentType> = {};
+
+    private mounted = false;
+
+    async componentDidMount() {
+      this.mounted = true;
+
+      try {
+        const { default: component } = await importComponent();
+
+        if (this.mounted) {
+          this.setState({ component });
+        }
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    componentWillUnmount() {
+      this.mounted = false;
+    }
+
+    render() {
+      if (this.state.component) {
+        return <this.state.component {...this.props} />;
+      }
+
+      return null;
+    }
+  }
+
+  return AsyncComponent;
+}
 
 export default asyncComponent;
