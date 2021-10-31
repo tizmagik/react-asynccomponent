@@ -8,7 +8,24 @@ type State<ComponentType> = {
   component?: ComponentType;
 };
 
-function asyncComponent(importComponent: DynamicImport): ComponentType {
+export type AsyncComponentOptions = {
+  /** Function will be called if there's an error while running the dynamic import */
+  onError?: (e: unknown) => void;
+
+  /** Function called upon successfully loading.  */
+  onLoaded?: (c: ComponentType) => void;
+
+  /** Component to render if there was an error. */
+  ErrorComponent?: ComponentType;
+
+  /** Component to render while loading. */
+  Loading?: ComponentType;
+};
+
+function asyncComponent(
+  importComponent: DynamicImport,
+  options: AsyncComponentOptions = {}
+): ComponentType {
   class AsyncComponent extends Component {
     state: State<ComponentType> = {};
 
@@ -21,10 +38,16 @@ function asyncComponent(importComponent: DynamicImport): ComponentType {
         const { default: component } = await importComponent();
 
         if (this.mounted) {
+          options.onLoaded?.(component);
           this.setState({ component });
         }
       } catch (e) {
-        console.log(e);
+        if (this.mounted) {
+          options.onError?.(e);
+
+          // fallback to ErrorComponent
+          this.setState({ component: options.ErrorComponent });
+        }
       }
     }
 
@@ -35,6 +58,10 @@ function asyncComponent(importComponent: DynamicImport): ComponentType {
     render() {
       if (this.state.component) {
         return <this.state.component {...this.props} />;
+      }
+
+      if (options.Loading) {
+        return <options.Loading {...this.props} />;
       }
 
       return null;
