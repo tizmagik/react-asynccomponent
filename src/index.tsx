@@ -1,15 +1,47 @@
-import React, { FC, HTMLAttributes, ReactChild } from 'react';
+import React, { Component, ComponentType } from 'react';
 
-export interface Props extends HTMLAttributes<HTMLDivElement> {
-  /** custom content, defaults to 'the snozzberries taste like snozzberries' */
-  children?: ReactChild;
+type DynamicImport = () => Promise<{
+  default: ComponentType;
+}>;
+
+type State<ComponentType> = {
+  component?: ComponentType;
+};
+
+function asyncComponent(importComponent: DynamicImport): ComponentType {
+  class AsyncComponent extends Component {
+    state: State<ComponentType> = {};
+
+    private mounted = false;
+
+    async componentDidMount() {
+      this.mounted = true;
+
+      try {
+        const { default: component } = await importComponent();
+
+        if (this.mounted) {
+          this.setState({ component });
+        }
+      } catch (e) {
+        console.log(e);
+      }
+    }
+
+    componentWillUnmount() {
+      this.mounted = false;
+    }
+
+    render() {
+      if (this.state.component) {
+        return <this.state.component {...this.props} />;
+      }
+
+      return null;
+    }
+  }
+
+  return AsyncComponent;
 }
 
-// Please do not use types off of a default export module or else Storybook Docs will suffer.
-// see: https://github.com/storybookjs/storybook/issues/9556
-/**
- * A custom Thing component. Neat!
- */
-export const Thing: FC<Props> = ({ children }) => {
-  return <div>{children || `the snozzberries taste like snozzberries`}</div>;
-};
+export default asyncComponent;
